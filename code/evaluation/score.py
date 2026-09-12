@@ -220,27 +220,89 @@ def sample_truth(data: Dataset) -> List[Dict[str, str]]:
     ]
 
 
+def load_mode(data: Dataset, mode: str) -> Evidence:
+    """``stub`` = zero AI evidence; ``ai`` = the cached Layer 1 extraction."""
+    if mode == "stub":
+        return stub_evidence()
+    from evidence_ai import load_cached_evidence
+
+    return load_cached_evidence(data)
+
+
 def predict_samples(
     data: Dataset, evidence: Optional[Evidence] = None, cfg: ForecastConfig = DEFAULT
 ) -> List[Dict[str, str]]:
     return run(data, data.samples, evidence or stub_evidence(), cfg)
 
 
+FIELD_ROWS = (
+    ("affordability_status", "affordability_status"),
+    ("recommended_payment_method", "recommended_payment_method"),
+    ("earliest_date_for_full_payment", "earliest_date_for_full_payment"),
+    ("spending_changes_needed", "spending_changes_needed"),
+    ("payment_plan (exact)", "payment_plan_exact"),
+    ("payment_plan (relaxed)", "payment_plan_relaxed"),
+    ("amount_safe_to_pay (+/-0.01)", "amount_exact"),
+)
+
+
+def format_delta(stub: Dict, ai: Dict) -> str:
+    total = stub["total"]
+    lines = [
+        f"{'field':<32}{'stub':>7}{'+AI':>7}{'delta':>8}",
+        "-" * 54,
+    ]
+    for label, key in FIELD_ROWS:
+        a, b = stub["counts"][key], ai["counts"][key]
+        sign = f"{b - a:+d}" if b != a else "="
+        lines.append(f"{label:<32}{a:>7}{b:>7}{sign:>8}")
+    lines.append("-" * 54)
+    a, b = stub["field_points"], ai["field_points"]
+    lines.append(f"{'overall (of ' + str(stub['field_max']) + ')':<32}{a:>7}{b:>7}{b - a:+8d}")
+    lines.append(
+        f"{'overall %':<32}{a / total / 6 * 100:>6.1f}%{b / total / 6 * 100:>6.1f}%"
+        f"{(b - a) / total / 6 * 100:+7.1f}%"
+    )
+    lines.append(
+        f"{'explanation token-F1':<32}{stub['explanation_f1']:>7.3f}{ai['explanation_f1']:>7.3f}"
+        f"{ai['explanation_f1'] - stub['explanation_f1']:+8.3f}"
+    )
+    lines.append(
+        f"{'amount MAPE %':<32}{stub['mape']:>7.1f}{ai['mape']:>7.1f}{ai['mape'] - stub['mape']:+8.1f}"
+    )
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="score predictions against the solved samples")
     parser.add_argument("--pred", default=None, help="CSV of predictions to score")
     parser.add_argument("--diff", action="store_true", help="print the per-row diff table")
+    parser.add_argument(
+        "--evidence", choices=("stub", "ai"), default="ai", help="which Layer 1 evidence to use"
+    )
+    parser.add_argument(
+        "--compare", action="store_true", help="score both evidence modes and print the delta"
+    )
     args = parser.parse_args(argv)
 
     data = Dataset()
+    truth = sample_truth(data)
+
+    if args.compare:
+        stub = score(predict_samples(data, load_mode(data, "stub")), truth)
+        ai = score(predict_samples(data, load_mode(data, "ai")), truth)
+        print(format_delta(stub, ai))
+        print()
+        print(format_report(ai, show_diff=args.diff))
+        return 0
+
     if args.pred:
         with open(args.pred, newline="", encoding="utf-8") as handle:
             predicted = list(csv.DictReader(handle))
     else:
-        predicted = predict_samples(data)
+        predicted = predict_samples(data, load_mode(data, args.evidence))
 
-    result = score(predicted, sample_truth(data))
-    print(format_report(result, show_diff=args.diff))
+    print(format_report(score(predicted, truth), show_diff=args.diff))
     return 0
 
 
