@@ -39,13 +39,13 @@ class ForecastConfig:
     """Trailing window used for recurrence detection.  0 = all history."""
 
     # --- amount estimation -------------------------------------------------
-    amount_estimator: str = "median"
+    amount_estimator: str = "mean"
     """``median`` | ``mean`` | ``last`` | ``max`` over the estimation window."""
 
     estimation_occurrences: int = 6
     """How many recent occurrences feed the estimator.  0 = all."""
 
-    variable_mode: str = "discrete"
+    variable_mode: str = "daily_burn"
     """``discrete``: variable spend lands on projected dates.
     ``daily_burn``: variable spend is smeared as a flat daily rate."""
 
@@ -53,7 +53,7 @@ class ForecastConfig:
     income_estimator: str = "last"
     """``last`` | ``median`` | ``min`` over the estimation window."""
 
-    extend_explicit_income: bool = False
+    extend_explicit_income: bool = True
     """Repeat a scheduled salary monthly when history shows no income series."""
 
     # --- cash-state rules --------------------------------------------------

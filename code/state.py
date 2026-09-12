@@ -36,6 +36,22 @@ from money import D, ZERO
 DROPPED_STATUSES = frozenset({"failed", "cancelled", "unrealized"})
 CASHLESS_DIRECTIONS = frozenset({"non_cash"})
 
+TERMINAL_MARKERS = ("final ", "previous ", "last ")
+"""A record that names itself as the end of an income stream.
+
+``Final employer payroll`` and ``Previous employer payroll`` both say the
+stream they belong to has stopped.  Where a new stream replaced it, that
+stream has its own description and is detected on its own merits; where
+nothing replaced it, the user has no further income and the forecast must
+say so.  The data supports both readings: of the users carrying such a row,
+11 have a later income stream and 7 do not.
+"""
+
+
+def _is_terminal(description: str) -> bool:
+    lowered = description.strip().lower()
+    return any(lowered.startswith(marker) for marker in TERMINAL_MARKERS)
+
 
 # --------------------------------------------------------------------------
 # records
@@ -269,12 +285,93 @@ class StateBuilder:
 
     # -- recurrence --------------------------------------------------------
 
-    def _detect_series(self, events: Sequence[Event], as_of: date) -> List[Series]:
+    def _cadence(self, members: Sequence[Event]) -> Optional[Tuple[int, int]]:
+        """(median gap, regular-gap count) when the dates support a cadence."""
         cfg = self.config
-        groups: Dict[Tuple[str, str], List[Event]] = {}
+        if len(members) < cfg.min_occurrences:
+            return None
+        dates = [e.settlement_date for e in members]
+        gaps = [(b - a).days for a, b in zip(dates, dates[1:]) if (b - a).days > 0]
+        if len(gaps) < cfg.min_occurrences - 1:
+            return None
+        median_gap = int(statistics.median(gaps))
+        if median_gap <= 0:
+            return None
+        regular = sum(1 for g in gaps if abs(g - median_gap) <= cfg.gap_tolerance * median_gap)
+        if regular / len(gaps) < cfg.gap_stability:
+            return None
+        return median_gap, regular
+
+    def _anchor_on_cadence(self, members: Sequence[Event], median_gap: int) -> bool:
+        """Is the most recent occurrence itself on the detected cadence?
+
+        Projection starts from the last occurrence, so a cadence is only usable
+        if that occurrence sits on it.  A payroll history of five monthly
+        credits followed by a one-off arrears payment and a final net-salary
+        line still looks monthly in aggregate, but projecting from the last row
+        would place every future salary on the wrong day of the month.  This is
+        the test that separates a genuine single series from a category that is
+        quietly holding several.
+        """
+        if len(members) < 2:
+            return False
+        last_gap = (members[-1].settlement_date - members[-2].settlement_date).days
+        return abs(last_gap - median_gap) <= self.config.gap_tolerance * median_gap
+
+    def _make_series(self, members: Sequence[Event], series_id: str, median_gap: int) -> Optional[Series]:
+        cfg = self.config
+        window = list(members)
+        if cfg.estimation_occurrences:
+            window = window[-cfg.estimation_occurrences:]
+        amounts: List[Decimal] = []
+        for event in window:
+            value = self._amount_home(event)
+            if value is not None:
+                amounts.append(value)
+        if not amounts:
+            return None
+        anchor = members[-1]
+        how = cfg.income_estimator if anchor.direction == "credit" else cfg.amount_estimator
+        monthly_day = anchor.settlement_date.day if 26 <= median_gap <= 32 else None
+        return Series(
+            series_id=series_id,
+            user_id=anchor.user_id,
+            category=anchor.category,
+            direction=anchor.direction,
+            anchor_event=anchor,
+            amount=_estimate(amounts, how),
+            period_days=median_gap,
+            monthly_day=monthly_day,
+            last_seen=anchor.settlement_date,
+            occurrences=len(members),
+            flexibility=anchor.flexibility,
+            minimum_allowed_amount=anchor.minimum_allowed_amount,
+            description=anchor.description,
+        )
+
+    def _detect_series(self, events: Sequence[Event], as_of: date) -> List[Series]:
+        """Named commitments cluster by description; variable spend pools by category.
+
+        One category can hold several genuinely distinct commitments - a base
+        salary on the 15th alongside a sales commission on the 24th, or a
+        monthly payroll alongside a one-off arrears payment.  Pooling those by
+        category alone either invents a nonsense cadence or destroys the
+        cadence entirely, so a named recurring commitment is clustered by its
+        description first.
+
+        High-frequency variable spending is the opposite case: the weekly
+        grocery run is one commitment wearing a dozen different merchant names.
+        Those descriptions never form a stable cluster of their own, so they
+        fall through to a category-level pool.  ``DESCRIPTION_MIN_GAP_DAYS``
+        separates the two: a named commitment recurs monthly or slower, while
+        variable spend recurs far more often.
+        """
+        cfg = self.config
         earliest = None
         if cfg.history_window_days:
             earliest = as_of - timedelta(days=cfg.history_window_days)
+
+        usable: List[Event] = []
         for event in events:
             if event.status != "settled" or event.direction in CASHLESS_DIRECTIONS:
                 continue
@@ -284,61 +381,57 @@ class StateBuilder:
                 continue
             if event.linked_event_id and event.event_type == "refund":
                 continue  # reversal of a specific charge, not a recurring credit
-            groups.setdefault((event.direction, event.category), []).append(event)
+            usable.append(event)
+
+        pooled: Dict[Tuple[str, str], List[Event]] = {}
+        for event in usable:
+            pooled.setdefault((event.direction, event.category), []).append(event)
 
         series: List[Series] = []
-        for (direction, category), members in sorted(groups.items()):
+        for (direction, category), members in sorted(pooled.items()):
             members = sorted(members, key=lambda e: (e.settlement_date, e.event_id))
-            if len(members) < cfg.min_occurrences:
-                continue
-            dates = [e.settlement_date for e in members]
-            gaps = [(b - a).days for a, b in zip(dates, dates[1:]) if (b - a).days > 0]
-            if len(gaps) < cfg.min_occurrences - 1:
-                continue
-            median_gap = int(statistics.median(gaps))
-            if median_gap <= 0:
-                continue
-            regular = sum(
-                1 for g in gaps if abs(g - median_gap) <= cfg.gap_tolerance * median_gap
-            )
-            if regular / len(gaps) < cfg.gap_stability:
+            cadence = self._cadence(members)
+            if cadence is not None and self._anchor_on_cadence(members, cadence[0]):
+                built = self._make_series(members, f"{direction}:{category}", cadence[0])
+                if built is not None:
+                    series.append(built)
                 continue
 
-            window = members
-            if cfg.estimation_occurrences:
-                window = members[-cfg.estimation_occurrences:]
-            amounts: List[Decimal] = []
-            for event in window:
-                value = self._amount_home(event)
-                if value is not None:
-                    amounts.append(value)
-            if not amounts:
-                continue
-            how = cfg.income_estimator if direction == "credit" else cfg.amount_estimator
-            amount = _estimate(amounts, how)
-
-            anchor = members[-1]
-            monthly_day = None
-            if 26 <= median_gap <= 32:
-                monthly_day = anchor.settlement_date.day
-            series.append(
-                Series(
-                    series_id=f"{direction}:{category}",
-                    user_id=anchor.user_id,
-                    category=category,
-                    direction=direction,
-                    anchor_event=anchor,
-                    amount=amount,
-                    period_days=median_gap,
-                    monthly_day=monthly_day,
-                    last_seen=anchor.settlement_date,
-                    occurrences=len(members),
-                    flexibility=anchor.flexibility,
-                    minimum_allowed_amount=anchor.minimum_allowed_amount,
-                    description=anchor.description,
+            # The category as a whole has no usable cadence, so it is holding
+            # more than one commitment.  Split by description and judge each on
+            # its own: a base salary and a sales commission are two streams, and
+            # a one-off arrears payment is neither.
+            by_description: Dict[str, List[Event]] = {}
+            for event in members:
+                by_description.setdefault(event.description, []).append(event)
+            for description, group in sorted(by_description.items()):
+                group = sorted(group, key=lambda e: (e.settlement_date, e.event_id))
+                inner = self._cadence(group)
+                if inner is None or not self._anchor_on_cadence(group, inner[0]):
+                    continue
+                built = self._make_series(
+                    group, f"{direction}:{category}:{description}", inner[0]
                 )
-            )
-        return series
+                if built is not None:
+                    series.append(built)
+
+        return [
+            s
+            for s in series
+            if not _is_terminal(s.anchor_event.description) and self._still_running(s, as_of)
+        ]
+
+    def _still_running(self, item: Series, as_of: date) -> bool:
+        """Has the series actually kept going, or has it quietly lapsed?
+
+        A commitment that missed its most recent due date is not evidence of a
+        continuing commitment.  A second household income last paid 47 days ago
+        on a 31-day cadence has stopped; projecting it forward invents income
+        the history no longer supports, which is exactly what the spec forbids.
+        The same test protects against resurrecting a cancelled subscription.
+        """
+        overdue = (as_of - item.last_seen).days
+        return overdue <= item.period_days * (1 + self.config.gap_tolerance)
 
     def _series_flows(
         self, series: Sequence[Series], as_of: date, end: date, explicit: Sequence[Flow]
@@ -411,41 +504,58 @@ class StateBuilder:
             amendments,
             key=lambda a: (_AMENDMENT_PRIORITY.get(a.amendment_type, 99), a.message_id),
         )
-        by_series = {s.series_id: s for s in series}
-        income = by_series.get("credit:salary")
+
+        def income_series() -> List[Series]:
+            return [s for s in series if s.direction == "credit"]
+
+        def income_flow_ids() -> set:
+            return {s.series_id for s in income_series()}
 
         for item in ordered:
             kind = item.amendment_type
             if kind is AmendmentType.EMPLOYMENT_TERMINATED:
-                if income is not None:
-                    series = [s for s in series if s is not income]
-                    flows = [f for f in flows if f.series_id != income.series_id]
-                    income = None
-                    notes.append(f"{item.message_id}: salary series removed")
+                targets = income_flow_ids()
+                if targets:
+                    series = [s for s in series if s.series_id not in targets]
+                    flows = [f for f in flows if f.series_id not in targets]
+                    notes.append(f"{item.message_id}: income series removed")
             elif kind is AmendmentType.SALARY_AMOUNT_CHANGE and item.amount is not None:
                 effective = item.effective_date or as_of
-                flows = [
-                    (
-                        Flow(
-                            on=f.on,
-                            amount=item.amount,
-                            category=f.category,
-                            origin=f.origin,
-                            event_id=f.event_id,
-                            series_id=f.series_id,
-                            note=f.note,
+                amount = self._to_home(item, as_of)
+                targets = income_flow_ids()
+                if targets:
+                    flows = [
+                        (
+                            Flow(
+                                on=f.on,
+                                amount=amount,
+                                category=f.category,
+                                origin=f.origin,
+                                event_id=f.event_id,
+                                series_id=f.series_id,
+                                note=f.note,
+                            )
+                            if f.series_id in targets and f.on >= effective
+                            else f
                         )
-                        if f.series_id == "credit:salary" and f.on >= effective
-                        else f
-                    )
-                    for f in flows
-                ]
-                notes.append(f"{item.message_id}: salary amount amended")
+                        for f in flows
+                    ]
+                    notes.append(f"{item.message_id}: income amount amended")
+                else:
+                    # A confirmed salary with no detected series is not invented
+                    # income: the employer has stated the amount, and often the
+                    # date.  Refusing to count it is not the conservative
+                    # reading, it is simply a wrong one.
+                    created = self._income_from_amendment(item, amount, as_of, end)
+                    flows.extend(created)
+                    if created:
+                        notes.append(f"{item.message_id}: income series created from message")
             elif kind is AmendmentType.SALARY_DATE_SHIFT and item.effective_date:
+                targets = income_flow_ids()
                 moved: List[Flow] = []
                 shifted = False
                 for f in flows:
-                    if f.series_id == "credit:salary" and not shifted and f.on >= as_of:
+                    if f.series_id in targets and not shifted and f.on >= as_of:
                         moved.append(
                             Flow(
                                 on=item.effective_date,
@@ -461,7 +571,7 @@ class StateBuilder:
                     else:
                         moved.append(f)
                 flows = moved
-                notes.append(f"{item.message_id}: salary date shifted")
+                notes.append(f"{item.message_id}: income date shifted")
             elif kind is AmendmentType.RECURRING_EXPENSE_PCT_CHANGE and item.percent:
                 factor = Decimal(1) + item.percent / Decimal(100)
                 target = item.category
@@ -526,6 +636,82 @@ class StateBuilder:
         flows = [f for f in flows if as_of <= f.on <= end]
         return series, flows, notes
 
+    # -- income the history alone does not carry ---------------------------
+
+    def _to_home(self, item: Amendment, on: date) -> Decimal:
+        """Amendment amounts arrive in the message's currency, not the user's."""
+        amount = item.amount or ZERO
+        home = self.data.profiles[item.user_id].home_currency
+        if not item.currency or item.currency == home:
+            return amount
+        try:
+            return self.data.convert(amount, item.currency, home, item.effective_date or on)
+        except Exception:
+            return amount
+
+    def _income_from_amendment(
+        self, item: Amendment, amount: Decimal, as_of: date, end: date
+    ) -> List[Flow]:
+        """Monthly income built from a confirmed employer statement."""
+        if amount <= 0:
+            return []
+        first = item.effective_date or as_of
+        if first < as_of:
+            first = _add_months(first, 1, first.day)
+        flows: List[Flow] = []
+        cursor = first
+        while cursor <= end:
+            flows.append(
+                Flow(
+                    on=cursor,
+                    amount=amount,
+                    category="salary",
+                    origin="recurring",
+                    series_id="credit:salary:amended",
+                    event_id="",
+                    note=f"confirmed by {item.message_id}",
+                )
+            )
+            cursor = _add_months(cursor, 1, first.day)
+        return flows
+
+    def _extend_scheduled_income(
+        self, explicit: Sequence[Flow], series: Sequence[Series], as_of: date, end: date
+    ) -> List[Flow]:
+        """Repeat a confirmed future salary monthly when history shows no series.
+
+        A user whose history holds a single prior payslip plus one scheduled
+        "next confirmed salary" is not a user with one month of income and then
+        nothing.  Projecting only the scheduled row makes the balance drift down
+        for the rest of the horizon and turns affordable requests into refusals.
+        """
+        if not self.config.extend_explicit_income:
+            return []
+        if any(s.direction == "credit" for s in series):
+            return []
+        incoming = sorted(
+            (f for f in explicit if f.amount > 0 and f.on >= as_of), key=lambda f: f.on
+        )
+        if not incoming:
+            return []
+        anchor = incoming[-1]
+        flows: List[Flow] = []
+        cursor = _add_months(anchor.on, 1, anchor.on.day)
+        while cursor <= end:
+            flows.append(
+                Flow(
+                    on=cursor,
+                    amount=anchor.amount,
+                    category=anchor.category,
+                    origin="recurring",
+                    series_id="credit:salary:scheduled",
+                    event_id=anchor.event_id,
+                    note=f"{anchor.note} (repeated monthly)",
+                )
+            )
+            cursor = _add_months(cursor, 1, anchor.on.day)
+        return flows
+
     # -- entry point -------------------------------------------------------
 
     def build(self, user_id: str, as_of: date) -> UserState:
@@ -536,7 +722,7 @@ class StateBuilder:
         explicit = self._explicit_flows(events, as_of, end)
         series = self._detect_series(events, as_of)
         projected = self._series_flows(series, as_of, end, explicit)
-        flows = explicit + projected
+        flows = explicit + projected + self._extend_scheduled_income(explicit, series, as_of, end)
 
         amendments = self.evidence.amendments_for(user_id)
         series, flows, notes = self._apply_amendments(amendments, series, flows, as_of, end)
