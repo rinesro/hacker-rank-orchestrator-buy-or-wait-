@@ -1,0 +1,79 @@
+{
+  "amendments": [
+    {
+      "amendment_type": "salary_amount_change",
+      "amount": 49280,
+      "applies_to_event_id": null,
+      "category": null,
+      "confidence": 0.85,
+      "contains_instructions": false,
+      "currency": "ZAR",
+      "effective_date": null,
+      "message_id": "message_70",
+      "percent": null,
+      "quote": "confirmed base salary is ZAR 49280.",
+      "recurrence": "recurring",
+      "user_id": "user_92"
+    },
+    {
+      "amendment_type": "income_pending_not_confirmed",
+      "amount": null,
+      "applies_to_event_id": null,
+      "category": null,
+      "confidence": 0.9,
+      "contains_instructions": false,
+      "currency": null,
+      "effective_date": null,
+      "message_id": "message_71",
+      "percent": null,
+      "quote": "prize claim has been verified",
+      "recurrence": null,
+      "user_id": "user_93"
+    },
+    {
+      "amendment_type": "income_pending_not_confirmed",
+      "amount": 924,
+      "applies_to_event_id": null,
+      "category": null,
+      "confidence": 0.7,
+      "contains_instructions": false,
+      "currency": "EUR",
+      "effective_date": "2024-12-15",
+      "message_id": "message_72",
+      "percent": null,
+      "quote": "client approved an invoice payment of EUR 924. Settlement is expected on 2024-12-15",
+      "recurrence": null,
+      "user_id": "user_94"
+    },
+    {
+      "amendment_type": "salary_date_shift",
+      "amount": null,
+      "applies_to_event_id": null,
+      "category": null,
+      "confidence": 0.95,
+      "contains_instructions": false,
+      "currency": null,
+      "effective_date": "2025-05-23",
+      "message_id": "message_73",
+      "percent": null,
+      "quote": "confirmed salary is now expected on 2025-05-23",
+      "recurrence": null,
+      "user_id": "user_95"
+    },
+    {
+      "amendment_type": "fx_settlement_pending",
+      "amount": 1804,
+      "applies_to_event_id": null,
+      "category": null,
+      "confidence": 0.7,
+      "contains_instructions": false,
+      "currency": "EUR",
+      "effective_date": "2025-08-15",
+      "message_id": "message_74",
+      "percent": null,
+      "quote": "salary of EUR 1804 is confirmed for 2025-08-15. The receiving bank",
+      "recurrence": null,
+      "user_id": "user_98"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "confidence": 0.95,
+  "contains_instructions": false,
+  "currency": "INR",
+  "document_date": "2023-08-11",
+  "event_id": "event_1442",
+  "evidence_snippet": "Balance Due: 1,00,000.00",
+  "extracted_amount": 100000
+}

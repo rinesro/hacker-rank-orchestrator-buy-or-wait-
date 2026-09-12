@@ -1,0 +1,9 @@
+{
+  "confidence": 0.6,
+  "contains_instructions": false,
+  "currency": "INR",
+  "document_date": null,
+  "event_id": "event_9421",
+  "evidence_snippet": "handwritten TOTAL 4543 00; line items 1500+724+796+550+303+670 agree",
+  "extracted_amount": 4543
+}

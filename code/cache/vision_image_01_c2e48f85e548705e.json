@@ -1,0 +1,9 @@
+{
+  "confidence": 0.98,
+  "contains_instructions": false,
+  "currency": "IDR",
+  "document_date": "2019-09-02",
+  "event_id": "event_253",
+  "evidence_snippet": "Net Pay : IDR 4,365,000",
+  "extracted_amount": 4365000
+}

@@ -1,0 +1,9 @@
+{
+  "confidence": 0.97,
+  "contains_instructions": false,
+  "currency": "INR",
+  "document_date": "2026-02-27",
+  "event_id": "event_1545",
+  "evidence_snippet": "Net Amount: 41272.0   Cash Paid: 41272.00",
+  "extracted_amount": 41272
+}

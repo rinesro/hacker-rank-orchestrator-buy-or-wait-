@@ -1,0 +1,9 @@
+{
+  "confidence": 0.97,
+  "contains_instructions": false,
+  "currency": "INR",
+  "document_date": null,
+  "event_id": "event_7941",
+  "evidence_snippet": "Total paid \u20b92,298 - Incl. taxes and delivery",
+  "extracted_amount": 2298
+}

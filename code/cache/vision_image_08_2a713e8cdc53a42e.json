@@ -1,0 +1,9 @@
+{
+  "confidence": 0.98,
+  "contains_instructions": false,
+  "currency": "INR",
+  "document_date": "2026-07-24",
+  "event_id": "event_4535",
+  "evidence_snippet": "Total Amount Received \u20b9 15,339.00 - Rupees Fifteen Thousand Three Hundred Thirty Nine Only",
+  "extracted_amount": 15339
+}

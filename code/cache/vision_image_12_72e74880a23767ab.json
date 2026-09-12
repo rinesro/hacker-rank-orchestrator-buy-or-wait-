@@ -1,0 +1,9 @@
+{
+  "confidence": 0.95,
+  "contains_instructions": false,
+  "currency": "USD",
+  "document_date": "2025-10-01",
+  "event_id": "event_7307",
+  "evidence_snippet": "Total: $33.50 (Cash Paid $40.00, Change $6.50)",
+  "extracted_amount": 33.5
+}

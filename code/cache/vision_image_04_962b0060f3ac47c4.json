@@ -1,0 +1,9 @@
+{
+  "confidence": 0.6,
+  "contains_instructions": false,
+  "currency": "INR",
+  "document_date": null,
+  "event_id": "event_1700",
+  "evidence_snippet": "TOTAL ORDER BILL DETAILS / Item Bill \u20b92854.00 (grand-total line is cropped off the image)",
+  "extracted_amount": 2854
+}
