@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 .env
 .venv/
-code.zip
+# code.zip is committed so it survives this ephemeral container

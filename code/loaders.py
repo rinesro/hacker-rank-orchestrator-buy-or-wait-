@@ -26,8 +26,21 @@ DATASET_DIRNAME = "dataset"
 
 
 def repo_root() -> str:
-    """Resolve the repository root relative to this file, never a hardcoded path."""
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    """Locate the directory holding ``dataset/``, relative to this file.
+
+    Walks upward from this module rather than assuming a fixed depth, so the
+    solution runs both in place as ``code/main.py`` and when ``code.zip`` is
+    unpacked next to ``dataset/``.  Never a hardcoded path.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    cursor = here
+    while True:
+        if os.path.isdir(os.path.join(cursor, DATASET_DIRNAME)):
+            return cursor
+        parent = os.path.dirname(cursor)
+        if parent == cursor:
+            return os.path.dirname(here)  # fall back to the historical layout
+        cursor = parent
 
 
 def dataset_dir() -> str:

@@ -41,7 +41,7 @@ def main(argv=None) -> int:
     requests = data.samples if rows and rows[0]["request_id"] in sample_ids else data.requests
 
     report = validate(rows, data, requests)
-    offenders = assert_no_hardcoded_answers(os.path.join(repo_root(), "code"), data)
+    offenders = assert_no_hardcoded_answers(os.path.dirname(HERE), data)
 
     for line in report.warnings:
         print(f"[warn] {line}")

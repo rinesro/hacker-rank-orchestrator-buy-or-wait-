@@ -55,10 +55,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     root = repo_root()
+    here = os.path.dirname(os.path.abspath(__file__))
     data = Dataset()
     cfg: ForecastConfig = DEFAULT
 
-    offenders = assert_no_hardcoded_answers(os.path.join(root, "code"), data)
+    offenders = assert_no_hardcoded_answers(here, data)
     if offenders:
         for line in offenders:
             print(f"[disqualifying] {line}", file=sys.stderr)

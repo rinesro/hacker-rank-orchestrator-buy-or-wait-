@@ -109,12 +109,18 @@ MESSAGES_SCHEMA: Dict[str, Any] = {
 # --------------------------------------------------------------------------
 
 
+# Resolved against this module, not the repository root, so the layout works
+# both in place (``code/prompts``) and when code.zip is unpacked standalone
+# (``prompts`` beside ``main.py``).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
 def cache_dir() -> str:
-    return os.path.join(repo_root(), "code", "cache")
+    return os.path.join(_HERE, "cache")
 
 
 def prompts_dir() -> str:
-    return os.path.join(repo_root(), "code", "prompts")
+    return os.path.join(_HERE, "prompts")
 
 
 def read_prompt(name: str) -> str:
@@ -433,7 +439,7 @@ def load_cached_evidence(data: Optional[Dataset] = None, live: bool = False) -> 
     data = data or Dataset()
     client = None
     if live:
-        ledger = Ledger(os.path.join(repo_root(), "code", "evaluation", "usage_ledger.jsonl"))
+        ledger = Ledger(os.path.join(_HERE, "evaluation", "usage_ledger.jsonl"))
         client = ModelClient(ledger)
     return Evidence(
         image_amounts=extract_images(data, client),
