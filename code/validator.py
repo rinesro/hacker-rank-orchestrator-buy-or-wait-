@@ -235,7 +235,12 @@ def assert_no_hardcoded_answers(code_dir: str, data: Dataset) -> List[str]:
     """
     ids = {r.request_id for r in data.requests} | {r.request_id for r in data.samples}
     ids |= set(data.profiles)
-    pattern = re.compile(r"\b(?:request|user)_\d+\b")
+    ids |= set(data.events_by_id)
+    ids |= {i.image_id for i in data.images}
+    ids |= {m.message_id for m in data.messages}
+    ids |= {o.payment_option_id for o in
+            (opt for opts in data.options_by_request.values() for opt in opts)}
+    pattern = re.compile(r"\b(?:request|user|event|image|message|payment_option)_\d+\b")
     offenders: List[str] = []
     for root, _, files in os.walk(code_dir):
         if "cache" in root or "__pycache__" in root:

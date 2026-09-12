@@ -32,8 +32,12 @@ class ForecastConfig:
     gap_tolerance: float = 0.45
     """A gap counts as regular when it is within this fraction of the median."""
 
-    gap_stability: float = 0.6
-    """Fraction of gaps that must be regular for the series to be recurring."""
+    gap_stability: float = 0.5
+    """Fraction of gaps that must be regular for the series to be recurring.
+
+    Swept, not asserted: 0.4 and 0.5 tie for best and 0.6-0.8 score two points
+    worse, so 0.5 is taken as the interior of the winning plateau rather than
+    its edge."""
 
     history_window_days: int = 0
     """Trailing window used for recurrence detection.  0 = all history."""

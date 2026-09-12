@@ -36,7 +36,7 @@ from money import D, ZERO
 DROPPED_STATUSES = frozenset({"failed", "cancelled", "unrealized"})
 CASHLESS_DIRECTIONS = frozenset({"non_cash"})
 
-TERMINAL_MARKERS = ("final ", "previous ", "last ")
+TERMINAL_MARKERS = ("final ", "previous ")
 """A record that names itself as the end of an income stream.
 
 ``Final employer payroll`` and ``Previous employer payroll`` both say the
@@ -45,6 +45,11 @@ stream has its own description and is detected on its own merits; where
 nothing replaced it, the user has no further income and the forecast must
 say so.  The data supports both readings: of the users carrying such a row,
 11 have a later income stream and 7 do not.
+
+Only markers the data actually carries are listed: 44 ``Previous employer
+payroll`` and 7 ``Final employer payroll`` rows.  A speculative ``last ``
+prefix was tried and removed - it matched nothing, so it could only ever have
+misfired on a description this dataset does not contain.
 """
 
 

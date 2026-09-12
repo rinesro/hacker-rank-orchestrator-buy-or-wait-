@@ -311,14 +311,14 @@ class TestSpendingChanges(unittest.TestCase):
         self.assertEqual(simulate(state, changes=[change]).min_balance, simulate(state).min_balance)
 
     def test_change_render_matches_the_output_contract(self):
-        self.assertEqual(Change("stop", "s", "event_14").render(), "stop:event_14")
+        self.assertEqual(Change("stop", "s", "synthetic_a").render(), "stop:synthetic_a")
         self.assertEqual(
-            Change("reduce_to", "s", "event_21", new_amount=D("100")).render(),
-            "reduce_to:event_21:100",
+            Change("reduce_to", "s", "synthetic_b", new_amount=D("100")).render(),
+            "reduce_to:synthetic_b:100",
         )
         self.assertEqual(
-            Change("reduce_to", "s", "event_21", new_amount=D("23.5")).render(),
-            "reduce_to:event_21:23.50",
+            Change("reduce_to", "s", "synthetic_b", new_amount=D("23.5")).render(),
+            "reduce_to:synthetic_b:23.50",
         )
 
 

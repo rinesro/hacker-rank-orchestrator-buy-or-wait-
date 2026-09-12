@@ -51,6 +51,7 @@ GRID: Dict[str, tuple] = {
     "income_estimator": ("last", "median", "min"),
     "variable_mode": ("discrete", "daily_burn"),
     "gap_tolerance": (0.35, 0.45, 0.6),
+    "gap_stability": (0.4, 0.5, 0.6, 0.7),
 }
 
 
